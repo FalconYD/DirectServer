@@ -41,6 +41,12 @@ typedef struct ST_COMMAND_MESSAGE
 	}
 }CMDMSG;
 
+typedef enum EN_FUNC_CMD
+{
+	EFC_TASK_REG = 100,
+	EFC_TASK_ALIVE
+}FUNCCMD;
+
 /**
 @brief	소켓 연결
 @return	void

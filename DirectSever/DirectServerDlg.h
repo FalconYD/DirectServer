@@ -42,6 +42,8 @@ public:
 	int m_fn_DeleteTrayIcon();
 	afx_msg void OnTrayExit();
 	afx_msg void OnTrayOpen();
-	void CDirectServerDlg::m_fn_Ballon();
-	void CDirectServerDlg::m_fn_WriteInfo(char* strLog, ...);
+	void m_fn_Ballon();
+	void m_fn_WriteInfo(char* strLog, ...);
+	void m_fn_WriteInfoClient(char* strLog, ...);
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 };

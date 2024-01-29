@@ -71,6 +71,10 @@ static unsigned int __stdcall THREAD_MESSAGE_RECV(LPVOID pParam);
 */
 MYDLLTYPE int _lib_Connect(const char* sIpAddress, int iPort, void* callback)
 {
+	if (g_bIsConnected)
+	{
+		return 1;
+	}
 	unsigned int addr;
 	struct sockaddr_in server;
 
@@ -129,7 +133,10 @@ MYDLLTYPE void _lib_Disconnect()
 	GetExitCodeThread(g_ThreadParam.hThread, &nExitCode);
 	TerminateThread(g_ThreadParam.hThread, nExitCode);
 	if (g_bIsConnected)
+	{
 		closesocket(g_sock);
+		g_bIsConnected = false;
+	}
 	return;
 }
 

@@ -292,14 +292,18 @@ unsigned int CDirectClientDlg::THREAD_CONNECT(LPVOID pParam)
 		Sleep(pThreadparam->nScanInterval);
 		pThreadparam->enState = THREAD_STATUS::THREAD_STAT_RUNNING;
 
- 		if (_lib_Connect("127.0.0.1", 20000, m_fn_Callback) < 0)
- 		{
- 			pDlg->m_fn_EnableControl(false);
- 		}
- 		else
- 		{
- 			pDlg->m_fn_EnableControl(true);
- 		}
+		nRet = _lib_Connect("127.0.0.1", 20000, m_fn_Callback);
+
+		switch (nRet)
+		{
+		case -1: // err
+			pDlg->m_fn_EnableControl(false);
+			break;
+		case 0: // conn
+		case 1: // already conn
+			pDlg->m_fn_EnableControl(true);
+			break;
+		}
 	}
 	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_COMPLETE;
 	return 0;

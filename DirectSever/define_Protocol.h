@@ -33,5 +33,6 @@ typedef enum EN_MSG_TYPE
 
 typedef enum EN_FUNC_CMD
 {
-	EFC_TASK_REG = 100
+	EFC_TASK_REG = 100,
+	EFC_TASK_ALIVE
 }FUNCCMD;

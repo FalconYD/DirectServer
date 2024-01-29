@@ -74,6 +74,7 @@ BEGIN_MESSAGE_MAP(CDirectServerDlg, CDialogEx)
 	ON_MESSAGE(WM_TRAY_NOTIFYICACTION, OnTaryNotifyAction)
 	ON_COMMAND(ID_TRAY_EXIT, &CDirectServerDlg::OnTrayExit)
 	ON_COMMAND(ID_TRAY_OPEN, &CDirectServerDlg::OnTrayOpen)
+	ON_WM_TIMER()
 END_MESSAGE_MAP()
 
 
@@ -214,11 +215,33 @@ void CDirectServerDlg::m_fn_WriteInfo(char* strLog, ...)
 	((CListBox*)GetDlgItem(IDC_LIST_INFO))->SetTopIndex(nScrollCount - 1);
 }
 
+void CDirectServerDlg::m_fn_WriteInfoClient(char* strLog, ...)
+{
+	char chLog[LOG_TEXT_MAX_SIZE] = { 0, };
+	char chBuff[LOG_TEXT_MAX_SIZE] = { 0, };
+	wchar_t wchMsg[LOG_TEXT_MAX_SIZE] = { 0, };
+	int nScrollCount = 0;
+	va_list ap;
+	va_start(ap, strLog);
+	vsnprintf_s(chLog, LOG_TEXT_MAX_SIZE, strLog, ap);
+	va_end(strLog);
+
+	_in_fn_Multi2Uni(chLog, wchMsg);
+
+	nScrollCount = ((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->GetCount();
+	if (nScrollCount > 200)
+		((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->DeleteString(0);
+	((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->AddString(wchMsg);
+	((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->SetScrollPos(SB_VERT, nScrollCount, TRUE);
+	((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->SetTopIndex(nScrollCount - 1);
+}
+
 void CDirectServerDlg::OnDestroy()
 {
 	CDialogEx::OnDestroy();
 
 	// TODO: 여기에 메시지 처리기 코드를 추가합니다.
+	KillTimer(1001);
 	m_fn_DeleteTrayIcon();
 	if (mc_pServerClass != nullptr)
 		delete mc_pServerClass;
@@ -245,6 +268,7 @@ void CDirectServerDlg::m_fn_InitServer()
 		delete mc_pServerClass;
 	mc_pServerClass = new ServerClass();
 	mc_pServerClass->RegPrintFunc(std::bind(&CDirectServerDlg::m_fn_WriteLog, this, std::placeholders::_1));
+	mc_pServerClass->RegInfoFunc(std::bind(&CDirectServerDlg::m_fn_WriteInfoClient, this, std::placeholders::_1));
 	if (!mc_pServerClass->IsConnected())
 	{
 		m_fn_WriteLog("FAILED to init server Socket.");
@@ -254,6 +278,7 @@ void CDirectServerDlg::m_fn_InitServer()
 
 	mc_pServerClass->RunListen();
 
+	SetTimer(1001, 500, NULL);
 }
 
 void CDirectServerDlg::m_fn_Tray()
@@ -352,4 +377,28 @@ void CDirectServerDlg::m_fn_Ballon()
 	lstrcpy(nid.szInfo, _T("프로그램 활성화: 더블클릭, Tray우클릭-열기\n프로그램 종료: Tray우클릭-종료"));
 	lstrcpy(nid.szInfoTitle, _T("Direct Server"));
 	::Shell_NotifyIcon(NIM_MODIFY, &nid);
+}
+
+void CDirectServerDlg::OnTimer(UINT_PTR nIDEvent)
+{
+	// TODO: 여기에 메시지 처리기 코드를 추가 및/또는 기본값을 호출합니다.
+	switch (nIDEvent)
+	{
+	case 1001:
+	{
+		if (mc_pServerClass != nullptr)
+		{
+			if (mc_pServerClass->IsConnected())
+			{
+				((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->ResetContent();
+				for (auto client : mc_pServerClass->GetClientList())
+				{
+					m_fn_WriteInfoClient("[%d] %s", client.GetIndex(), client.GetAddressName());
+				}
+			}
+		}
+	}
+		break;
+	}
+	CDialogEx::OnTimer(nIDEvent);
 }
