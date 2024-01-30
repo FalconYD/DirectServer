@@ -75,6 +75,7 @@ BEGIN_MESSAGE_MAP(CDirectServerDlg, CDialogEx)
 	ON_COMMAND(ID_TRAY_EXIT, &CDirectServerDlg::OnTrayExit)
 	ON_COMMAND(ID_TRAY_OPEN, &CDirectServerDlg::OnTrayOpen)
 	ON_WM_TIMER()
+	ON_BN_CLICKED(IDC_BN_SHUTDOWN, &CDirectServerDlg::OnBnClickedBnShutdown)
 END_MESSAGE_MAP()
 
 
@@ -393,7 +394,7 @@ void CDirectServerDlg::OnTimer(UINT_PTR nIDEvent)
 				((CListBox*)GetDlgItem(IDC_LIST_INFO_CLIENT))->ResetContent();
 				for (auto client : mc_pServerClass->GetClientList())
 				{
-					m_fn_WriteInfoClient("[%d] %s", client.GetIndex(), client.GetAddressName());
+					m_fn_WriteInfoClient("[%d] %s", client->GetTaskNum(), client->GetAddressName());
 				}
 			}
 		}
@@ -401,4 +402,11 @@ void CDirectServerDlg::OnTimer(UINT_PTR nIDEvent)
 		break;
 	}
 	CDialogEx::OnTimer(nIDEvent);
+}
+
+
+void CDirectServerDlg::OnBnClickedBnShutdown()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	OnTrayExit();
 }

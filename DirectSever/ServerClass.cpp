@@ -4,6 +4,7 @@
 
 ServerClass::ServerClass(int nPort)
 {
+	InitializeSRWLock(&m_srwClient);
 	//cout << "Starting up TCP Chat server\n";
 	m_bIsConnected = false;
 
@@ -22,16 +23,16 @@ ServerClass::ServerClass(int nPort)
 	local.sin_addr.s_addr = INADDR_ANY;
 	local.sin_port = htons((u_short)nPort);
 	
-	m_SListenClient = socket(AF_INET, SOCK_STREAM, 0);
+	m_sockServerListener = socket(AF_INET, SOCK_STREAM, 0);
 	//m_SListenClient = socket(AF_INET, SOCK_STREAM, IPPROTO_UDP);
 
-	if (m_SListenClient == INVALID_SOCKET)
+	if (m_sockServerListener == INVALID_SOCKET)
 		return;
 
-	if (bind(m_SListenClient, (sockaddr*)&local, sizeof(local)) != 0)
+	if (bind(m_sockServerListener, (sockaddr*)&local, sizeof(local)) != 0)
 		return;
 
-	if (listen(m_SListenClient, 10) != 0)
+	if (listen(m_sockServerListener, 10) != 0)
 		return;
 
 	m_bIsConnected = true;
@@ -40,41 +41,24 @@ ServerClass::ServerClass(int nPort)
 
 ServerClass::~ServerClass()
 {
-	
-
 	DWORD nExitCode = NULL;
-
-	m_stThreadRecv.bThreadFlag = false;
-	while (m_stThreadRecv.enState == THREAD_STATUS::THREAD_STAT_RUNNING)
-	{
-		Sleep(1);
-	}
-	GetExitCodeThread(m_stThreadRecv.hThread, &nExitCode);
-	m_stThreadRecv.hThread = NULL;
-
-
-	m_stThreadSender.bThreadFlag = false;
-	while (m_stThreadSender.enState == THREAD_STATUS::THREAD_STAT_RUNNING)
-	{
-		Sleep(1);
-	}
-	GetExitCodeThread(m_stThreadSender.hThread, &nExitCode);
-	m_stThreadSender.hThread = NULL;
-
 	
 	m_stThreadListen.bThreadFlag = false;
-// 	while (m_stThreadListen.enState == THREAD_STATUS::THREAD_STAT_RUNNING)
-// 	{
-// 		Sleep(1);
-// 	}
 
 	GetExitCodeThread(m_stThreadListen.hThread, &nExitCode);
 	TerminateThread(m_stThreadListen.hThread, nExitCode);
 	m_stThreadListen.hThread = NULL;
 
-	
+	SendServerDown();
+	for (auto* client : m_listClients)
+	{
 
-	closesocket(m_SListenClient);
+		delete(ClientSock*)client;
+		client = nullptr;
+	}
+
+
+	closesocket(m_sockServerListener);
 
 	WSACleanup();
 }
@@ -83,192 +67,17 @@ void ServerClass::StartListenClient()
 {
 	sockaddr_in from;
 	int fromlen = sizeof(from);
-	SOCKET sock = accept(m_SListenClient, (struct sockaddr*) & from, &fromlen);
-	m_SClient.SetSocket(sock);
-	if (m_SClient.GetSocket() != INVALID_SOCKET)
-	{
-		m_vClientList.push_back(m_SClient);
-	}
-	else
-		return;
-
-	m_stThreadRecv.bThreadFlag = true;
-	m_stThreadRecv.cObjectPointer1 = this;
-	m_stThreadRecv.cObjectPointer2 = &m_SClient;
-	m_stThreadRecv.nScanInterval = 1;
-	m_stThreadRecv.enState = THREAD_STATUS::THREAD_STAT_NONE;
-	m_stThreadRecv.hThread = (HANDLE*)_beginthreadex(NULL, 0, THREAD_SERVER_RECV, &m_stThreadRecv, 0, NULL);
-	CloseHandle(m_stThreadRecv.hThread);
-
-	m_stThreadSender.bThreadFlag = true;
-	m_stThreadSender.cObjectPointer1 = this;
-	m_stThreadSender.cObjectPointer2 = &m_SClient;
-	m_stThreadSender.nScanInterval = 1;
-	m_stThreadSender.enState = THREAD_STATUS::THREAD_STAT_NONE;
-	m_stThreadSender.hThread = (HANDLE*)_beginthreadex(NULL, 0, THREAD_SERVER_SENDER, &m_stThreadSender, 0, NULL);
-	CloseHandle(m_stThreadSender.hThread);
-}
-
-int ServerClass::SendMessagePort(CMDMSG stMsg)
-{
-	int iStat = 0;
-	std::list<SocketDefine>::iterator itl;
-
-	if (m_vClientList.size() == 0)
-		return 0;
-
-	for (itl = m_vClientList.begin(); itl != m_vClientList.end(); itl++)
-	{
-		if (stMsg.uMsg_Type == MSGTYPE::EMT_TARGET)
-		{
-			if (itl->GetIndex() == stMsg.uTask_Dst)
-			{
-				iStat = send(itl->GetSocket(), (char*)&stMsg, sizeof(CMDMSG), 0);
-				if (iStat != -1)
-					break;
-			}
-		}
-		else
-		{
-			iStat = send(itl->GetSocket(), (char*)&stMsg, sizeof(CMDMSG), 0);
-			if (iStat == -1)
-				m_vClientList.remove(*itl);
-		}
-	}
-	if (iStat == -1)
-		return 1;
-
-	return 0;
-}
-
-int ServerClass::RecClient(SocketDefine sRecSocket)
-{
-	//char temp[sizeof(CMDMSG)] = { 0, };
-	CMDMSG temp;
+	SOCKET sock = accept(m_sockServerListener, (struct sockaddr*) & from, &fromlen);
 	
-	SOCKET sock = sRecSocket.GetSocket();
-	if (sock == INVALID_SOCKET)
-		return -1;
-
-	int iStat = recv(sock,(char*)&temp, sizeof(CMDMSG), 0);
-	if (iStat == -1)
+	if (sock != INVALID_SOCKET)
 	{
-		if (m_vClientList.size() > 0)
-		{
-			m_vClientList.remove(sRecSocket);
-		}
-		return 1;
+		ClientSock* pSock = new ClientSock(this);
+		pSock->SetSocket(sock);
+		AddClient(pSock);
+		pSock->StartRecv();
 	}
 	else
-	{
-		for (auto &sock : m_vClientList)
-		{
-			if (sock.CompareSocket(sRecSocket))
-			{
-				sock.PushData((CMDMSG)temp);
-				break;
-			}
-		}
-		//memcpy(&m_stCmdMsg, temp, sizeof(CMDMSG));
-		//
-		//WriteLog("[%d:%d:%d][%d:%d:%d][%d:%d:%d]%d,%d,%d : %s",
-		//	m_stCmdMsg.uMsg_Type, m_stCmdMsg.uTask_Src, m_stCmdMsg.uTask_Dst,
-		//	m_stCmdMsg.uFunID_Src, m_stCmdMsg.uSeqID_Src, m_stCmdMsg.uUnitID_Src,
-		//	m_stCmdMsg.uFunID_Dst, m_stCmdMsg.uSeqID_Dst, m_stCmdMsg.uUnitID_Dst,
-		//	m_stCmdMsg.uRetStatus, m_stCmdMsg.uMsgSize, m_stCmdMsg.cDummy, m_stCmdMsg.cMsgBuf);
-		//
-		//switch ((FUNCCMD)m_stCmdMsg.uFunID_Dst)
-		//{
-		//case FUNCCMD::EFC_TASK_REG:
-		//	RegTask(sRecSocket, m_stCmdMsg.uTask_Src);
-		//	break;
-		//case FUNCCMD::EFC_TASK_ALIVE:
-		//	GetAliveClient(m_stCmdMsg);
-		//	break;
-		//default:
-		//	SendMessagePort(m_stCmdMsg);
-		//	break;
-		//}
-
-		return 0;
-	}
-	return 0;
-}
-
-void ServerClass::MessageProc(SocketDefine sRecSocket)
-{
-	CMDMSG temp;
-
-	SOCKET sock = sRecSocket.GetSocket();
-	if (sock == INVALID_SOCKET)
 		return;
-
-	for (auto& sock : m_vClientList)
-	{
-		if (sock.CompareSocket(sRecSocket))
-		{
-			if (!sock.IsDataPopable()) break;
-
-			temp = sock.PopData();
-
-			memcpy(&m_stCmdMsg, &temp, sizeof(CMDMSG));
-			
-			WriteLog("[%d:%d:%d][%d:%d:%d][%d:%d:%d]%d,%d,%d : %s",
-				m_stCmdMsg.uMsg_Type, m_stCmdMsg.uTask_Src, m_stCmdMsg.uTask_Dst,
-				m_stCmdMsg.uFunID_Src, m_stCmdMsg.uSeqID_Src, m_stCmdMsg.uUnitID_Src,
-				m_stCmdMsg.uFunID_Dst, m_stCmdMsg.uSeqID_Dst, m_stCmdMsg.uUnitID_Dst,
-				m_stCmdMsg.uRetStatus, m_stCmdMsg.uMsgSize, m_stCmdMsg.cDummy, m_stCmdMsg.cMsgBuf);
-			
-			switch ((FUNCCMD)m_stCmdMsg.uFunID_Dst)
-			{
-			case FUNCCMD::EFC_TASK_REG:
-				RegTask(sRecSocket, m_stCmdMsg.uTask_Src);
-				break;
-			case FUNCCMD::EFC_TASK_ALIVE:
-				GetAliveClient(m_stCmdMsg);
-				break;
-			default:
-				SendMessagePort(m_stCmdMsg);
-				break;
-			}
-
-			break;
-		}
-	}
-}
-
-bool ServerClass::GetAliveClient(CMDMSG msg)
-{
-	bool bRet = false;
-	int iStat = 0;
-	std::list<SocketDefine>::iterator itl;
-	if (m_vClientList.size() == 0)
-		return 0;
-
-	for (itl = m_vClientList.begin(); itl != m_vClientList.end(); itl++)
-	{
-		if (itl->GetIndex() == msg.uTask_Dst)
-		{
-			//msg.uTask_Dst
-			bRet = true;
-			break;
-		}
-	}
-
-	for (itl = m_vClientList.begin(); itl != m_vClientList.end(); itl++)
-	{
-		if (itl->GetIndex() == msg.uTask_Src)
-		{
-			msg.uUnitID_Dst = bRet;
-			iStat = send(itl->GetSocket(), (char*)&msg, sizeof(CMDMSG), 0);
-			break;
-		}
-	}
-
-	if (iStat == -1)
-		bRet = false;
-
-	return bRet;
 }
 
 void ServerClass::RunListen()
@@ -282,33 +91,6 @@ void ServerClass::RunListen()
 	CloseHandle(hThread);
 }
 
-void ServerClass::RegTask(SocketDefine &sock, int nIndex)
-{
-	std::list<SocketDefine>::iterator itl;
-	int nListIndex = 0;
-	for (itl = m_vClientList.begin(); itl != m_vClientList.end(); itl++)
-	{
-		if (itl->GetIndex() == nIndex)
-		{
-			WriteLog("Regist Fail : %d socket (Index : %d)", nListIndex, nIndex);
-			return;
-		}
-		nListIndex++;
-	}
-
-	nListIndex = 0;
-	for (itl = m_vClientList.begin(); itl != m_vClientList.end(); itl++)
-	{
-		if (itl->CompareSocket(sock))
-		{
-			itl->SetIndex(nIndex);
-			sock.SetIndex(nIndex);
-			WriteLog("Regist Success : %d socket (Index : %d)", nListIndex, nIndex);
-			break;
-		}
-		nListIndex++;
-	}
-}
 
 void ServerClass::WriteLog(char* strLog, ...)
 {
@@ -354,37 +136,148 @@ unsigned int ServerClass::THREAD_SERVER_LISTEN(LPVOID pParam)
 	return 0;
 }
 
-unsigned int ServerClass::THREAD_SERVER_RECV(LPVOID pParam)
+void ServerClass::AddClient(ClientSock* clientSock)
 {
-	THREAD_PARAM* pThreadparam = (THREAD_PARAM*)pParam;
-	ServerClass* pDlg = (ServerClass*)pThreadparam->cObjectPointer1;
-	SocketDefine Socket = *(SocketDefine*)pThreadparam->cObjectPointer2;
+	AcquireSRWLockExclusive(&m_srwClient);
+	m_listClients.push_back(clientSock);
+	ReleaseSRWLockExclusive(&m_srwClient);
+	WriteLog("Create Socket Client.");
+}
 
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_ACTIVE;
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_RUNNING;
-	while (pThreadparam->bThreadFlag)
+void ServerClass::RemoveClient(ClientSock* clientSock)
+{
+	if (m_listClients.size() > 0)
 	{
-		Sleep(pThreadparam->nScanInterval);
-		pDlg->RecClient(Socket);
+		AcquireSRWLockExclusive(&m_srwClient);
+		m_listClients.remove(clientSock);
+		ReleaseSRWLockExclusive(&m_srwClient);
+
+		delete(ClientSock*) clientSock;
+		clientSock = nullptr;
+		WriteLog("Destroy Socket Client.");
 	}
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_COMPLETE;
+}
+
+
+void ServerClass::RegTask(ClientSock* sock, int nTaskNum)
+{
+	std::list<ClientSock*>::iterator itl;
+	int nListIndex = 0;
+	for (itl = m_listClients.begin(); itl != m_listClients.end(); itl++)
+	{
+		if ((*itl)->GetTaskNum() == nTaskNum)
+		{
+			WriteLog("Regist Fail : %d socket (Index : %d)", nListIndex, nTaskNum);
+			return;
+		}
+		nListIndex++;
+	}
+
+	nListIndex = 0;
+	for (itl = m_listClients.begin(); itl != m_listClients.end(); itl++)
+	{
+		if ((*itl)->GetSocket() == sock->GetSocket())
+		{
+			(*itl)->SetTaskNum(nTaskNum);
+			//sock.SetTaskNum(nTaskNum);
+			WriteLog("Regist Success : %d socket (Index : %d)", nListIndex, nTaskNum);
+			break;
+		}
+		nListIndex++;
+	}
+}
+
+
+bool ServerClass::GetAliveClient(CMDMSG msg)
+{
+	bool bRet = false;
+	int iStat = 0;
+	std::list<ClientSock*>::iterator itl;
+	if (m_listClients.size() == 0)
+		return 0;
+
+	ALIVESTATE* pState = (ALIVESTATE*)msg.cMsgBuf;
+
+	const int MAXINDEX = MSG_BUFF_SIZE / sizeof(ALIVESTATE);
+
+	int idx;
+	// GetData.
+	for (itl = m_listClients.begin(); itl != m_listClients.end(); itl++)
+	{
+		idx = (*itl)->GetTaskNum();
+		if (idx > -1 && idx < MAXINDEX)
+		{
+			pState[idx].tasknum = idx;
+			pState[idx].taskstate = 1;
+		}
+		else
+		{
+			// idx over or not regist task
+			if (idx == -1)
+				WriteLog("Unregisted Task : [%d] %s", idx, (*itl)->GetAddressName());
+
+			if (idx > MAXINDEX)
+				WriteLog("Over Index : %s", (*itl)->GetAddressName());
+		}
+	}
+
+	// SendData.
+	for (itl = m_listClients.begin(); itl != m_listClients.end(); itl++)
+	{
+		if ((*itl)->GetTaskNum() == msg.uTask_Src)
+		{
+			msg.uRetStatus = bRet;
+			iStat = send((*itl)->GetSocket(), (char*)&msg, sizeof(CMDMSG), 0);
+			break;
+		}
+	}
+
+	if (iStat == -1)
+		bRet = false;
+
+	return bRet;
+}
+
+
+int ServerClass::SendMessagePort(CMDMSG stMsg)
+{
+	int iStat = 0;
+	std::list<ClientSock*>::iterator itl;
+
+	if (m_listClients.size() == 0)
+		return 0;
+
+	for (itl = m_listClients.begin(); itl != m_listClients.end(); itl++)
+	{
+		if (stMsg.uMsg_Type == MSGTYPE::EMT_TARGET)
+		{
+			if ((*itl)->GetTaskNum() == stMsg.uTask_Dst)
+			{
+				iStat = send((*itl)->GetSocket(), (char*)&stMsg, sizeof(CMDMSG), 0);
+				if (iStat != -1)
+					break;
+			}
+		}
+		else
+		{
+			iStat = send((*itl)->GetSocket(), (char*)&stMsg, sizeof(CMDMSG), 0);
+			if (iStat == -1)
+			{
+				RemoveClient(*itl);
+			}
+		}
+	}
+	if (iStat == -1)
+		return 1;
+
 	return 0;
 }
 
-unsigned int ServerClass::THREAD_SERVER_SENDER(LPVOID pParam)
+void ServerClass::SendServerDown()
 {
-	THREAD_PARAM* pThreadparam = (THREAD_PARAM*)pParam;
-	ServerClass* pDlg = (ServerClass*)pThreadparam->cObjectPointer1;
-	SocketDefine Socket = *(SocketDefine*)pThreadparam->cObjectPointer2;
+	CMDMSG msg;
+	msg.uMsg_Type = MSGTYPE::EMT_SERVERDOWN;
+	msg.uRetStatus = 1;
 
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_ACTIVE;
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_RUNNING;
-	while (pThreadparam->bThreadFlag)
-	{
-		Sleep(pThreadparam->nScanInterval);
-		//
-		pDlg->MessageProc(Socket);
-	}
-	pThreadparam->enState = THREAD_STATUS::THREAD_STAT_COMPLETE;
-	return 0;
+	SendMessagePort(msg);
 }

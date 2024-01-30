@@ -184,6 +184,7 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ClientSock.h" />
     <ClInclude Include="define_Class.h" />
     <ClInclude Include="define_Fuction.h" />
     <ClInclude Include="define_Protocol.h" />
@@ -197,6 +198,7 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ClientSock.cpp" />
     <ClCompile Include="DirectServer.cpp" />
     <ClCompile Include="DirectServerDlg.cpp" />
     <ClCompile Include="ServerClass.cpp" />

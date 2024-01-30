@@ -41,6 +41,7 @@
 #include "define_Fuction.h"
 #include "define_Class.h"
 #include "define_Protocol.h"
+#include "ClientSock.h"
 #include "ServerClass.h"
 
 

@@ -28,11 +28,14 @@ typedef struct ST_COMMAND_MESSAGE
 typedef enum EN_MSG_TYPE
 {
 	EMT_BROADCAST = 0,
-	EMT_TARGET
+	EMT_TARGET,
+	EMT_TASKREG,
+	EMT_TASKALIVE,
+	EMT_SERVERDOWN
 } MSGTYPE;
 
-typedef enum EN_FUNC_CMD
+typedef struct ST_ALIVE_STATE
 {
-	EFC_TASK_REG = 100,
-	EFC_TASK_ALIVE
-}FUNCCMD;
+	unsigned short tasknum;
+	unsigned short taskstate;
+}ALIVESTATE;

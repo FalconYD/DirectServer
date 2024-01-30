@@ -46,4 +46,5 @@ public:
 	void m_fn_WriteInfo(char* strLog, ...);
 	void m_fn_WriteInfoClient(char* strLog, ...);
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnBnClickedBnShutdown();
 };

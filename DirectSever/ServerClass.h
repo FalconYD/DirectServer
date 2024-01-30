@@ -2,6 +2,7 @@
 #include <string.h>
 #include <list>
 
+class ClientSock;
 
 class ServerClass
 {
@@ -12,37 +13,37 @@ public:
 	
 	bool IsConnected() { return m_bIsConnected; } // returns connection status
 	void StartListenClient(); // Listen to client
-	int SendMessagePort(CMDMSG stMsg);
-	int RecClient(SocketDefine sRecSocket); // receive message for a particulat socket
 	void RunListen();
 	void RegPrintFunc(pPrintFunction pFunc) { m_fn_WriteLog = std::move(pFunc); };
 	void RegInfoFunc(pPrintFunction pFunc) { m_fn_WriteInfoClient = std::move(pFunc); };
-	void RegTask(SocketDefine &sock, int nIndex);
-	void MessageProc(SocketDefine sRecSocket);
 
-	std::list<SocketDefine> GetClientList() { return m_vClientList; };
+	std::list<ClientSock*> GetClientList() { return m_listClients; };
 
+	void RegTask(ClientSock* sock, int nIndex);
 	bool GetAliveClient(CMDMSG msg);
-private:
+	int SendMessagePort(CMDMSG stMsg);
+
 	void WriteLog(char* strLog, ...);
-	void WriteClient(char* strLog, ...);
+	
+	void RemoveClient(ClientSock* clientSock);
+	void AddClient(ClientSock* clientSock);
+
+	void SendServerDown();
+	
+	static unsigned int __stdcall THREAD_SERVER_LISTEN(LPVOID pParam);
 private:
+
+	SRWLOCK m_srwClient;
+
 	pPrintFunction m_fn_WriteLog;
 	pPrintFunction m_fn_WriteInfoClient;
 	bool m_bIsConnected; // true - connected false - not connected
 	int m_iServerPort;
-	std::list<SocketDefine> m_vClientList;
-	SocketDefine m_SClient;
-	SOCKET m_SListenClient; // socket listening for client calls
+	std::list<ClientSock*> m_listClients;
 	
-	CMDMSG m_stCmdMsg;
+	SOCKET m_sockServerListener;
 
-	THREAD_PARAM m_stThreadSender;
-	THREAD_PARAM m_stThreadRecv;
 	THREAD_PARAM m_stThreadListen;
 
-public:
-	static unsigned int __stdcall THREAD_SERVER_SENDER(LPVOID pParam);
-	static unsigned int __stdcall THREAD_SERVER_RECV(LPVOID pParam);
-	static unsigned int __stdcall THREAD_SERVER_LISTEN(LPVOID pParam);
+	void WriteClient(char* strLog, ...);
 };
