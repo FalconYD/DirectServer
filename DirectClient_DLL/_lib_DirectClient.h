@@ -41,33 +41,60 @@ typedef struct ST_COMMAND_MESSAGE
 	}
 }CMDMSG;
 
-typedef enum EN_FUNC_CMD
+/**
+@brief	Client Alive 체크시 cMsgBuf 데이터 타입.
+@remark	
+ - 해당 구조체 포인터로 캐스팅 해서 사용.
+  ALIVESTATE* state = (ALIVESTATE*)cmdmsg.cMsgBuf;
+ - 포인터 접근 인덱스는 MSG_BUFF_SIZE / sizeof(ALIVESTATE) 보다 작아야함.
+ - 포인터 접근 인덱스는 tasknum.
+@author	선경규(Kyeong Kyu - Seon)
+@date	2024/1/30  18:20
+*/
+typedef struct ST_ALIVE_STATE
 {
-	EFC_TASK_REG = 100,
-	EFC_TASK_ALIVE
-}FUNCCMD;
+	unsigned short tasknum;
+	unsigned short taskstate;
+}ALIVESTATE;
+
+/**
+@brief	Msg_Type 정의.
+@remark	
+ - 
+@author	선경규(Kyeong Kyu - Seon)
+@date	2024/1/30  15:16
+*/
+typedef enum EN_MSG_TYPE
+{
+	EMT_BROADCAST = 0	, /// 모든 클라이언트에 전송 코드.
+	EMT_TARGET			, /// 특정 클라이언트에 전송 코드.
+	EMT_TASKREG			, /// 클라이언트 번호 등록 코드.
+	EMT_TASKALIVE		, /// 다른 클라이언트 상태 확인 코드. RetStatus가 1이면 Alive, 0이면 Dead
+	EMT_SERVERDOWN		  /// 서버 종료시 전송되는 코드. RetStatus 1을 동시 체크.
+} MSGTYPE;
 
 /**
 @brief	소켓 연결
 @return	void
 @param	IP String, Port Number, Callback Pointer
 @remark
-- 윈속 초기화
-- 소켓 연결
-- 수신 콜백 등록
-- 수신 스레드 실행
+ - 윈속 초기화
+ - 소켓 연결
+ - 수신 콜백 등록
+ - 수신 스레드 실행
 @author	선경규(Kyeong Kyu - Seon)
 @date	2019/10/8  17:03
 */
 MYDLLTYPE int _lib_Connect(const char* sIpAddress, int iPort, void* callback);
+
 
 /**
 @brief	 소켓 연결 종료
 @return	void
 @param	void
 @remark
-- 수신 쓰레드 종료
-- 소켓 종료
+ - 수신 쓰레드 종료
+ - 소켓 종료
 @author	선경규(Kyeong Kyu - Seon)
 @date	2019/10/8  17:02
 */
@@ -78,7 +105,7 @@ MYDLLTYPE void _lib_Disconnect();
 @return	성공시 0, 실패시 1
 @param	Command Message 구조체
 @remark
--
+ -
 @author	선경규(Kyeong Kyu - Seon)
 @date	2019/10/8  17:01
 */

@@ -179,6 +179,7 @@ void CDirectClientDlg::m_fn_InitUI()
 {
 	((CComboBox*)GetDlgItem(IDC_CB_MSGTYPE))->AddString(_T("BROADCAST"));
 	((CComboBox*)GetDlgItem(IDC_CB_MSGTYPE))->AddString(_T("TARGET"));
+	((CComboBox*)GetDlgItem(IDC_CB_MSGTYPE))->AddString(_T("TASK REG"));
 	((CComboBox*)GetDlgItem(IDC_CB_MSGTYPE))->SetCurSel(0);
 
 	GetDlgItem(IDC_EDIT_TASKSRC)->SetWindowText(_T("0"));
@@ -232,7 +233,12 @@ void CDirectClientDlg::OnBnClickedBnSend()
 void CDirectClientDlg::m_fn_Callback(CMDMSG stCmdMsg)
 {
 	char strMsg[LOG_TEXT_MAX_SIZE] = { 0, };
-	sprintf_s(strMsg, "Msg : %s", stCmdMsg.cMsgBuf);
+
+	if (stCmdMsg.uMsg_Type == MSGTYPE::EMT_SERVERDOWN)
+		sprintf_s(strMsg, "Recv Server Down.");
+	else
+		sprintf_s(strMsg, "Msg : %s", stCmdMsg.cMsgBuf);
+
 	gc_pMainDlg->m_fn_WriteLog(strMsg);
 
 	switch (stCmdMsg.uFunID_Dst)

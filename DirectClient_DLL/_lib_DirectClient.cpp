@@ -57,22 +57,12 @@ CMDMSG			g_stMsg;				/// 전송 인터페이스 Command Message 구조체
 int RecvMessagePort();					
 static unsigned int __stdcall THREAD_MESSAGE_RECV(LPVOID pParam);
 
-/**	
-@brief	소켓 연결
-@return	void
-@param	IP String, Port Number, Callback Pointer
-@remark	
- - 윈속 초기화
- - 소켓 연결
- - 수신 콜백 등록
- - 수신 스레드 실행
-@author	선경규(Kyeong Kyu - Seon)
-@date	2019/10/8  17:03
-*/
 MYDLLTYPE int _lib_Connect(const char* sIpAddress, int iPort, void* callback)
 {
 	if (g_bIsConnected)
 	{
+		//int iState = send(g_sock, "p", 1, 0);
+		//return iState == 0 ? 1 : -1;
 		return 1;
 	}
 	unsigned int addr;
@@ -117,16 +107,6 @@ MYDLLTYPE int _lib_Connect(const char* sIpAddress, int iPort, void* callback)
 	return 0;
 }
 
-/**	
-@brief	 소켓 연결 종료
-@return	void
-@param	void
-@remark	
- - 수신 쓰레드 종료
- - 소켓 종료
-@author	선경규(Kyeong Kyu - Seon)
-@date	2019/10/8  17:02
-*/
 MYDLLTYPE void _lib_Disconnect()
 {
 	DWORD nExitCode = NULL;
@@ -140,15 +120,6 @@ MYDLLTYPE void _lib_Disconnect()
 	return;
 }
 
-/**	
-@brief	데이터 전송
-@return	성공시 0, 실패시 1
-@param	Command Message 구조체
-@remark	
- - 
-@author	선경규(Kyeong Kyu - Seon)
-@date	2019/10/8  17:01
-*/
 MYDLLTYPE int _lib_SendData(CMDMSG cmd)
 {
 	int iStat = 0;
@@ -171,16 +142,26 @@ MYDLLTYPE int _lib_SendData(CMDMSG cmd)
 */
 int RecvMessagePort()
 {
-	char recvData[sizeof(CMDMSG)];
 	int iStat = 0;
 
-	iStat = recv(g_sock, recvData, sizeof(CMDMSG), 0);
-	if (iStat == -1)
-		return 1;
+	iStat = recv(g_sock, (char*)&g_stMsg, sizeof(CMDMSG), MSG_WAITALL);
+	if (iStat == -1) // fail
+		return 1;	
+
+	switch (g_stMsg.uMsg_Type)
+	{
+	case (int)MSGTYPE::EMT_SERVERDOWN:
+		if (g_stMsg.uRetStatus == 1)
+			_lib_Disconnect();
+		break;
+	case (int)MSGTYPE::EMT_TASKALIVE:
+		g_stMsg.uRetStatus = 1;
+		_lib_SendData(g_stMsg);
+		break;
+	}
 
 	if (g_callback != nullptr)
 	{
-		memcpy(&g_stMsg, recvData, sizeof(CMDMSG));
 		g_callback(g_stMsg);
 	}
 	return 0;
@@ -200,13 +181,17 @@ unsigned int __stdcall THREAD_MESSAGE_RECV(LPVOID pParam)
 {
 	THREAD_PARAM* stThread = (THREAD_PARAM*)pParam;
 	stThread->enState = THREAD_STATUS::THREAD_STAT_ACTIVE;
+	stThread->enState = THREAD_STATUS::THREAD_STAT_RUNNING;
+	
 	while (stThread->bThreadFlag)
 	{
-		stThread->enState = THREAD_STATUS::THREAD_STAT_RUNNING;
-		Sleep(stThread->nScanInterval);
+		
 		if (RecvMessagePort())
 			break;
+		else
+			Sleep(stThread->nScanInterval);
 	}
+
 	stThread->enState = THREAD_STATUS::THREAD_STAT_COMPLETE;
 	_endthreadex(0);
 	return 0;
